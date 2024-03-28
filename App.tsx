@@ -1,118 +1,90 @@
-/**
- * Sample React Native App
- * https://github.com/facebook/react-native
- *
- * @format
- */
-
 import React from 'react';
-import type {PropsWithChildren} from 'react';
+
 import {
-  SafeAreaView,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
+  NavigationContainer,
+  DefaultTheme,
+  DarkTheme as Dark,
+} from '@react-navigation/native';
+import {createNativeStackNavigator} from '@react-navigation/native-stack';
+import {
+  PaperProvider,
+  MD3LightTheme,
+  adaptNavigationTheme,
+  MD3DarkTheme,
   Text,
-  useColorScheme,
-  View,
-} from 'react-native';
+} from 'react-native-paper';
 
-import {
-  Colors,
-  DebugInstructions,
-  Header,
-  LearnMoreLinks,
-  ReloadInstructions,
-} from 'react-native/Libraries/NewAppScreen';
+import {Note, createTable, getConnection, getNotes} from './src/database';
+import {SQLiteDatabase} from 'react-native-sqlite-storage';
+import {Home} from './src/homepage';
+import {Edit} from './src/editpage';
+import {MyAppBar, RootStackParamList} from './src/navigation';
+import {View, useColorScheme} from 'react-native';
+import {useMaterial3Theme} from '@pchmn/expo-material3-theme';
+import {NotesContext} from './src/context';
 
-type SectionProps = PropsWithChildren<{
-  title: string;
-}>;
+const Stack = createNativeStackNavigator<RootStackParamList>();
 
-function Section({children, title}: SectionProps): React.JSX.Element {
-  const isDarkMode = useColorScheme() === 'dark';
-  return (
-    <View style={styles.sectionContainer}>
-      <Text
-        style={[
-          styles.sectionTitle,
-          {
-            color: isDarkMode ? Colors.white : Colors.black,
-          },
-        ]}>
-        {title}
-      </Text>
-      <Text
-        style={[
-          styles.sectionDescription,
-          {
-            color: isDarkMode ? Colors.light : Colors.dark,
-          },
-        ]}>
-        {children}
-      </Text>
-    </View>
+const App = () => {
+  const colorScheme = useColorScheme();
+  const {theme} = useMaterial3Theme();
+  const darkTheme = {...MD3DarkTheme, colors: theme.dark};
+  const lightTheme = {...MD3LightTheme, colors: theme.light};
+  const paperTheme = React.useMemo(
+    () =>
+      colorScheme === 'dark'
+        ? {...MD3DarkTheme, colors: theme.dark}
+        : {...MD3LightTheme, colors: theme.light},
+    [colorScheme, theme],
   );
-}
+  const {LightTheme, DarkTheme} = adaptNavigationTheme({
+    reactNavigationLight: DefaultTheme,
+    reactNavigationDark: Dark,
+    materialDark: darkTheme,
+    materialLight: lightTheme,
+  });
+  const navigationTheme = colorScheme === 'dark' ? DarkTheme : LightTheme;
 
-function App(): React.JSX.Element {
-  const isDarkMode = useColorScheme() === 'dark';
+  const [notes, setNotes] = React.useState<Note[]>([]);
+  const [database, setDatabase] = React.useState<SQLiteDatabase>();
 
-  const backgroundStyle = {
-    backgroundColor: isDarkMode ? Colors.darker : Colors.lighter,
-  };
+  React.useEffect(() => {
+    getConnection().then(db => {
+      createTable(db).then(() => {
+        setDatabase(db);
+      });
+    });
+  }, []);
 
-  return (
-    <SafeAreaView style={backgroundStyle}>
-      <StatusBar
-        barStyle={isDarkMode ? 'light-content' : 'dark-content'}
-        backgroundColor={backgroundStyle.backgroundColor}
-      />
-      <ScrollView
-        contentInsetAdjustmentBehavior="automatic"
-        style={backgroundStyle}>
-        <Header />
-        <View
-          style={{
-            backgroundColor: isDarkMode ? Colors.black : Colors.white,
-          }}>
-          <Section title="Step One">
-            Edit <Text style={styles.highlight}>App.tsx</Text> to change this
-            screen and then come back to see your edits.
-          </Section>
-          <Section title="See Your Changes">
-            <ReloadInstructions />
-          </Section>
-          <Section title="Debug">
-            <DebugInstructions />
-          </Section>
-          <Section title="Learn More">
-            Read the docs to discover what to do next:
-          </Section>
-          <LearnMoreLinks />
+  React.useEffect(() => {
+    if (database) getNotes(database).then(notes => setNotes(notes || []));
+  }, [database]);
+
+  if (!database)
+    return (
+      <PaperProvider theme={paperTheme}>
+        <View style={{flex: 1, justifyContent: 'center', alignItems: 'center'}}>
+          <Text variant="displayMedium">Loading...</Text>
         </View>
-      </ScrollView>
-    </SafeAreaView>
-  );
-}
+      </PaperProvider>
+    );
 
-const styles = StyleSheet.create({
-  sectionContainer: {
-    marginTop: 32,
-    paddingHorizontal: 24,
-  },
-  sectionTitle: {
-    fontSize: 24,
-    fontWeight: '600',
-  },
-  sectionDescription: {
-    marginTop: 8,
-    fontSize: 18,
-    fontWeight: '400',
-  },
-  highlight: {
-    fontWeight: '700',
-  },
-});
+  return (
+    <NotesContext.Provider value={{notes, database, setNotes}}>
+      <PaperProvider theme={paperTheme}>
+        <NavigationContainer theme={navigationTheme}>
+          <Stack.Navigator
+            initialRouteName="Home"
+            screenOptions={{
+              header: props => <MyAppBar {...props} />,
+            }}>
+            <Stack.Screen name="Home" component={Home} />
+            <Stack.Screen name="Edit" component={Edit} />
+          </Stack.Navigator>
+        </NavigationContainer>
+      </PaperProvider>
+    </NotesContext.Provider>
+  );
+};
 
 export default App;
